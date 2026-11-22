@@ -6,8 +6,15 @@ export class InputState {
   private motion = { x: 0, y: 0 }
   stick = { x: 0, y: 0 }
 
+  constructor(private readonly menuAction?: (action: 'pause' | 'loadout') => void) {}
+
   press(id: string, action: Action) {
     if (this.held.has(id)) return
+    if (this.menuAction && (action === 'pause' || action === 'loadout')) {
+      this.held.set(id, action)
+      this.menuAction(action)
+      return
+    }
     if (!this.down(action)) this.edges.add(action)
     this.held.set(id, action)
   }
@@ -114,7 +121,7 @@ export function bindInput(input: InputState, surface: HTMLElement, joystick: HTM
       previousY = event.clientY
     }
     if (!playing()) return
-    const locked = document.pointerLockElement === surface
+    const locked = event.pointerType === 'mouse' && document.pointerLockElement === surface
     if (event.pointerId === mouse || locked) {
       // Mouse button chords deliver intermediate presses and releases as pointer moves.
       updateMouseButtons(event.buttons)

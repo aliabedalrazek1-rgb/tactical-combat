@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindInput, InputState, keys } from '../src/input'
+import { defaultControls, type Controls } from '../src/bindings'
 
 describe('device-independent input', () => {
   it('maps every documented keyboard action', () => {
@@ -56,7 +57,7 @@ describe('device-independent input', () => {
 describe('bound pointer events', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  function setup() {
+  function setup(controls?: Controls) {
     function element() {
       const classes = new Set<string>()
       return Object.assign(new EventTarget(), {
@@ -81,7 +82,7 @@ describe('bound pointer events', () => {
     vi.stubGlobal('document', { querySelectorAll: () => [aim, fire] })
     const input = new InputState()
     const clear = bindInput(input, surface as unknown as HTMLElement, joystick as unknown as HTMLElement,
-      knob as unknown as HTMLElement, () => 1)
+      knob as unknown as HTMLElement, () => 1, controls)
     return { root, surface, joystick, knob, aim, fire, input, clear }
   }
 
@@ -101,6 +102,33 @@ describe('bound pointer events', () => {
     pointer(root, 'pointercancel', 3, 'touch', { button: -1, buttons: 0 })
     expect(input.down('fire')).toBe(true)
     pointer(root, 'pointerup', 1, 'mouse', { buttons: 0 })
+    expect(input.down('fire')).toBe(false)
+  })
+
+  it('maps a custom mouse chord and drag button through independent actions', () => {
+    const controls = defaultControls()
+    controls.bindings.Mouse0 = 'aim'
+    controls.bindings.Mouse2 = 'fire'
+    controls.dragButton = 0
+    const { surface, input } = setup(controls)
+    pointer(surface,'pointerdown',1,'mouse')
+    expect(input.down('aim')).toBe(true)
+    pointer(surface,'pointermove',1,'mouse',{buttons:3,movementX:7})
+    expect(input.down('fire')).toBe(true)
+    expect(input.readLook().x).toBe(7)
+    pointer(surface,'pointermove',1,'mouse',{buttons:2,movementX:7})
+    expect(input.down('aim')).toBe(false)
+    expect(input.down('fire')).toBe(true)
+    expect(input.readLook().x).toBe(0)
+  })
+
+  it('accepts direct camera motion with no buttons only while locked', () => {
+    const {surface,input} = setup()
+    pointer(surface,'pointermove',1,'mouse',{buttons:0,movementX:8})
+    expect(input.readLook().x).toBe(0)
+    Object.assign(document,{pointerLockElement:surface})
+    pointer(surface,'pointermove',1,'mouse',{buttons:0,movementX:8})
+    expect(input.readLook().x).toBe(8)
     expect(input.down('fire')).toBe(false)
   })
 

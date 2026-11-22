@@ -137,4 +137,8 @@ dialog button[hidden], [data-action][hidden] { display:none; }
 #partner-state { margin-left:8px; color:var(--accent); font:11px var(--mono); }
 #gear-details { font-size:13px; color:#c3cec5; }
 #loadout { max-width:68%; }
-@media (max-height:450px) { #partner { top:52px; } }
+@media (max-width:680px) { #partner { top:66px; } }
+
+#layout-preview { position:relative; height:180px; margin-block:10px; background:#101b1e; border:1px solid var(--line); overflow:hidden; }
+#layout-preview button { position:absolute; transform:translate(-50%,-50%); border-radius:50%; font:9px var(--mono); padding:0; touch-action:none; }
+#layout-preview .selected { z-index:1; background:#705b3e; border-color:var(--accent); }
