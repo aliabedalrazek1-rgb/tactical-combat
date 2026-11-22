@@ -10,6 +10,7 @@ export class Physics {
   private readonly body = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased())
   private readonly capsule = this.world.createCollider(RAPIER.ColliderDesc.capsule(0.52, 0.33), this.body)
   private readonly controller = this.world.createCharacterController(0.035)
+  private readonly solidTargets = new Set<number>()
   private readonly targets = new Map<number, Damageable>()
 
   static async init() {
@@ -28,14 +29,15 @@ export class Physics {
     this.world.step()
   }
 
-  box(x: number, y: number, z: number, w: number, h: number, d: number, target?: Damageable) {
+  box(x: number, y: number, z: number, w: number, h: number, d: number, target?: Damageable, solid = false) {
     const collider = this.world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2).setTranslation(x, y, z))
+    if (solid) this.solidTargets.add(collider.handle)
     if (target) this.targets.set(collider.handle, target)
     return collider
   }
 
   move(desired: Point) {
-    this.controller.computeColliderMovement(this.capsule, desired, undefined, undefined, (collider) => !this.targets.has(collider.handle))
+    this.controller.computeColliderMovement(this.capsule, desired, undefined, undefined, (collider) => !this.targets.has(collider.handle) || (this.solidTargets.has(collider.handle) && this.targets.get(collider.handle)!.health > 0))
     const movement = this.controller.computedMovement()
     const grounded = this.controller.computedGrounded()
     const p = this.body.translation()

@@ -99,6 +99,10 @@ export class Fighter {
     this.enter('attack', spec.startup + spec.active + spec.recovery)
     return true
   }
+  exert(dt:number) {
+    this.stamina = Math.max(0,this.stamina-8*dt)
+    this.breath = .42
+  }
   dodge(x:number, y:number) {
     if (!this.free || !this.spend(19)) return false
     const len = Math.hypot(x,y)

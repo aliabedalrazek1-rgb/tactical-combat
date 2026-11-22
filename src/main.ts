@@ -9,7 +9,10 @@ import { Physics } from './physics'
 import { Rendering } from './rendering'
 import { loadSettings, saveSettings } from './settings'
 import { element, HUD } from './ui'
-import { pistol, Weapon } from './weapon'
+import { Loadout, pelletDirection, type Weapon } from './weapon'
+import { contact, Fighter, type Pose } from './fighter'
+import { SparringPartner } from './sparring'
+import { RangeAudio } from './sound'
 import { loadControls, saveControls } from './bindings'
 import { controlEditor } from './control-editor'
 import './styles.css'
@@ -26,7 +29,9 @@ async function start() {
   const graphics = new Rendering(surface)
   const targets = buildArena(graphics.scene, physics)
   const operative = new Operative(graphics.scene)
-  const effects = new ShotEffects(graphics.scene)
+  const partner = new SparringPartner(graphics.scene,physics)
+  const effects = Array.from({length:8},() => new ShotEffects(graphics.scene))
+  const sound = new RangeAudio()
   const camera = new ShoulderCamera(graphics.camera, physics)
   const controls = loadControls(storage)
   const positionControls = controlEditor(controls, () => saveControls(storage, controls), () => settings.buttonSize)
@@ -40,12 +45,15 @@ async function start() {
   })
   const input = new InputState()
   const clearInput = bindInput(input, surface, element('joystick'), element('knob'), () => settings.touchSensitivity, controls, () => !paused)
-  const player = { health: 100, maxHealth: 100 }
+  let player = new Fighter()
   const position = new T.Vector3()
   const muzzle = new T.Vector3()
   const shoulder = new T.Vector3()
   let movement = new Movement()
-  let weapon = new Weapon(pistol)
+  let loadout = new Loadout()
+  let suppressTrigger = false
+  const playerPose = {position, facing:0}
+  const sightOrigin = new T.Vector3(), sightDelta = new T.Vector3()
   let now = 0
   let shotPoseUntil = 0
   let lastFrame = performance.now()
@@ -55,19 +63,26 @@ async function start() {
 
   function resetRange() {
     now = accumulator = shotPoseUntil = shadowTime = 0
-    player.health = player.maxHealth
-    weapon = new Weapon(pistol)
+    clearInput()
+    player = new Fighter()
+    loadout = new Loadout()
+    loadout.update(player,0)
+    suppressTrigger = false
+    partner.reset()
+    operative.equip(loadout.equipped,loadout.weapon?.spec)
     movement = new Movement()
     position.set(spawn.x, spawn.y, spawn.z)
     physics.reset()
     targets.forEach((target) => target.reset())
     operative.reset()
-    effects.reset()
+    effects.forEach(effect=>effect.reset())
     camera.reset()
     hud.reset()
     operative.update(position, 0, 'idle', false, 0, false, 0)
     camera.update(position, false, 0)
-    hud.update(weapon, player, 0, targets.length, false, now)
+    hud.update(loadout, player, 0, targets.length, false, now)
+    hud.showPartner(partner.fighter,false)
+    positionControls()
     graphics.draw(true)
   }
 
@@ -100,6 +115,8 @@ async function start() {
     if (hadLock && !locked) setPaused(true)
     hadLock = locked
   })
+  const selector = element<HTMLSelectElement>('loadout')
+  selector.addEventListener('change', () => loadout.request(selector.value))
   element('pause').addEventListener('click', () => setPaused(true))
   element('resume').addEventListener('click', () => setPaused(false))
   element('restart').addEventListener('click', () => {
@@ -118,54 +135,122 @@ async function start() {
     if (paused) graphics.draw(false)
   }).observe(surface)
 
-  function fire() {
-    const { range, damage, recoil } = weapon.spec
+  function fire(weapon:Weapon, aim:boolean) {
+    const spec = weapon.spec
     shoulder.copy(position).setY(position.y + 1.39)
-    const shot = traceShot(
-      (origin, direction, length) => physics.ray(origin, direction, length),
-      graphics.camera.position, camera.direction, shoulder, operative.muzzlePosition(muzzle), range,
-    )
-    const result = resolveShot(shot.hit, damage)
-    effects.play(shot.start, shot.end, Boolean(shot.hit))
+    operative.muzzlePosition(muzzle)
+    let hit = false, down = false, partnerHit = false
+    for (let i=0; i<spec.pellets; i++) {
+      const direction = pelletDirection(camera.direction,spec,i,loadout.sequence,aim)
+      const shot = traceShot((o,d,length) => physics.ray(o,d,length), graphics.camera.position,
+        direction, shoulder, muzzle, spec.range)
+      const result = resolveShot(shot.hit,spec.damage)
+      hit ||= result === 'hit'
+      down ||= result === 'down'
+      partnerHit ||= shot.hit?.target === partner.fighter
+      effects[i].play(shot.start,shot.end,Boolean(shot.hit))
+    }
+    if (partnerHit) partner.fighter.stagger(.22)
     operative.shoot()
-    camera.recoil(recoil)
-    if (result === 'hit') hud.notify('HIT', now, true)
-    if (result === 'down') hud.notify(targets.every((t) => t.health === 0) ? 'RANGE CLEAR' : 'TARGET DOWN', now, true, 1.45)
+    camera.recoil(spec.recoil)
+    sound.play(95+spec.damage*1.3,.06+spec.recoil,'sawtooth')
+    if (down) hud.notify(targets.every(t=>t.health===0) ? 'RANGE CLEAR' : 'TARGET DOWN',now,true,1.45)
+    else if (hit) hud.notify('HIT', now, true)
+  }
+
+  function exchange(attacker:Fighter, from:Pose, target:Fighter, to:Pose) {
+    const result = contact(attacker,from,target,to,() => {
+      sightOrigin.copy(from.position).y += 1
+      sightDelta.copy(to.position).sub(from.position)
+      const length = sightDelta.length()
+      return !physics.ray(sightOrigin,sightDelta.normalize(),length,true)
+    })
+    if (!result) return
+    const defended = result === 'parried' || result === 'evaded'
+    const message = defended && target === player ? result.toUpperCase() + ' · STRIKE TO COUNTER' :
+      (attacker === player ? '' : 'PARTNER · ') + result.toUpperCase()
+    hud.notify(message,now,result === 'hit' || defended)
+    sound.play(defended ? 560 : result === 'blocked' ? 290 : 120)
+    if (attacker === player && attacker.strike === 'shove' && ['hit','guard break'].includes(result))
+      partner.shove(from.facing)
   }
 
   const step = 1 / 60
   function simulate(dt: number) {
     now += dt
-    effects.update(dt)
-    const aim = input.down('aim')
-    const fireRequested = input.take('fire') || input.down('fire')
-    const running = input.down('run')
-    const ready = aim || fireRequested || now < shotPoseUntil
+    for (const effect of effects) effect.update(dt)
+    if (player.tick(dt)) hud.notify('MISS',now,false,.45)
+    if (player.state === 'down' && player.elapsed >= 1.8) {
+      resetRange()
+      return
+    }
+    if (input.take('holster')) loadout.holster()
+    const oldItem = loadout.equipped
+    loadout.update(player,now)
+    const weapon = loadout.weapon
+    const axes = input.axes()
+    const held = input.down('fire')
+    const trigger = input.take('fire')
+    if (oldItem !== loadout.equipped) {
+      suppressTrigger = held
+      shotPoseUntil = 0
+      operative.equip(loadout.equipped,weapon?.spec)
+    }
+    if (!held) suppressTrigger = false
+    const guardPressed = input.take('aim')
+    player.guard(input.down('aim') || guardPressed, guardPressed)
+    if (input.take('dodge') && movement.grounded && player.dodge(axes.x,axes.y)) weapon?.cancelReload()
+    const distance = position.distanceTo(partner.position)
+    const heavy = input.take('heavy'), kick = input.take('kick'), shove = input.take('shove')
+    if (!weapon && movement.grounded) {
+      const attack = heavy ? 'heavy' : kick ? 'kick' : shove ? 'shove' : trigger && !suppressTrigger ? 'fire' : undefined
+      if (attack && player.start(attack,axes.y > .25,distance)) sound.play(180,.045,'sine')
+    }
+    if (input.take('reload')) loadout.reload(player,now)
+    const aim = Boolean(weapon && player.free && !weapon.reloading && input.down('aim'))
+    const ready = Boolean(weapon && player.free && (aim || held || trigger || now < shotPoseUntil))
     const look = input.readLook()
-    const sensitivity = settings.lookSensitivity * (aim ? 0.66 : 1)
+    const focus = aim ? .66/(weapon?.spec.heft ?? 1) : 1
     const horizontal = +input.down('lookRight') - +input.down('lookLeft')
     const vertical = +input.down('lookDown') - +input.down('lookUp')
-    camera.rotate((horizontal * 1.85 * dt + look.x * 0.0035) * sensitivity,
-      (vertical * 1.45 * dt + look.y * 0.0035 * (controls.invert ? -1 : 1)) * controls.vertical * (aim ? 0.66 : 1))
-    const desired = movement.step(input.axes(), camera.yaw, running, input.take('jump'), aim, dt, ready && !weapon.reloading)
+    camera.rotate((horizontal*1.85*dt + look.x*.0035)*settings.lookSensitivity*focus,
+      (vertical*1.45*dt + look.y*.0035*(controls.invert ? -1 : 1))*controls.vertical*focus)
+    const dodging = player.state === 'dodge'
+    const moving = dodging ? {x:player.dodgeX,y:player.dodgeY} : axes
+    const pace = dodging ? 1.65*Math.max(0,1-player.elapsed/player.duration) :
+      player.state === 'down' || player.state === 'stagger' ? 0 : player.state === 'attack' ? .24 :
+      !player.free || player.state === 'guard' ? .48 : aim ? 1/(weapon?.spec.heft ?? 1) : 1
+    const run = player.state === 'idle' && input.down('run') && !ready && !weapon?.reloading && player.stamina > 1
+    const jump = input.take('jump')
+    const desired = movement.step({x:moving.x*pace,y:moving.y*pace},camera.yaw,run,
+      player.free && jump,aim,dt, ready || (!weapon && (player.state !== 'idle' || distance < 2.2)))
+    if (run && movement.state === 'run') player.exert(dt)
     const motion = physics.move(desired)
-    movement.contacts(motion.grounded, motion.movement.y, desired.y)
+    movement.contacts(motion.grounded,motion.movement.y,desired.y)
     position.copy(motion.position)
-    camera.update(position, aim, dt)
-    weapon.update(now)
-    if (input.take('reload')) weapon.reload(now)
-    const fired = fireRequested && weapon.fire(now)
-    if (fired) shotPoseUntil = now + 0.24
-    operative.update(position, movement.facing, movement.state, ready,
-      Math.asin(camera.direction.y), weapon.reloading, dt)
-    if (fired) fire()
-    targets.forEach((target) => target.update(dt))
-    hud.update(weapon, player, targets.filter((t) => t.health === 0).length, targets.length, aim, now)
+    playerPose.facing = movement.facing
+    camera.update(position,aim,dt)
+    partner.think(dt,playerPose,!weapon && player.health > 0)
+    exchange(player,playerPose,partner.fighter,partner)
+    exchange(partner.fighter,partner,player,playerPose)
+    const fired = !suppressTrigger && loadout.shoot(player,now,trigger,held)
+    if (fired) shotPoseUntil = now+.24
+    operative.update(position,movement.facing,movement.state,ready,Math.asin(camera.direction.y),
+      Boolean(weapon?.reloading),dt,player,weapon?.spec.heft)
+    partner.display(dt)
+    if (fired && weapon) fire(weapon,aim)
+    for (const target of targets) target.update(dt)
+    hud.update(loadout,player,targets.filter(t=>t.health===0).length,targets.length,aim,now)
+    hud.showPartner(partner.fighter,distance<3.3 && !weapon)
   }
 
   function frame(time: number) {
     const dt = Math.min((time - lastFrame) / 1000, 0.05)
     lastFrame = time
+    if (!paused && input.take('loadout')) {
+      setPaused(true)
+      selector.focus()
+    }
     if (input.take('pause')) setPaused(!paused)
     if (!paused && dt > 0) {
       accumulator += dt

@@ -128,3 +128,13 @@ dialog button[hidden], [data-action][hidden] { display:none; }
   .touch-actions { display:contents; }
   #joystick,.touch-actions button { position:absolute; bottom:auto; right:auto; transform:translate(-50%, -50%); }
 }
+
+#mode { display:block; font:10px var(--mono); color:var(--accent); text-transform:uppercase; margin-bottom:4px; }
+.stamina { font:10px var(--mono); color:#c5d9ca; display:block; margin-top:3px; }
+#stamina::-webkit-meter-optimum-value { background:#e9bb78; }
+#partner { position:absolute; left:50%; top:80px; transform:translateX(-50%); background:var(--panel); padding:5px 10px; text-align:center; pointer-events:none; }
+#partner span { font-size:11px; }
+#partner-state { margin-left:8px; color:var(--accent); font:11px var(--mono); }
+#gear-details { font-size:13px; color:#c3cec5; }
+#loadout { max-width:68%; }
+@media (max-height:450px) { #partner { top:52px; } }

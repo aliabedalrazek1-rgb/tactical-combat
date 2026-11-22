@@ -28,19 +28,26 @@
           <button type="button" data-action="reload">Reload</button>
           <button type="button" data-action="aim">Aim</button>
           <button type="button" data-action="fire">Fire</button>
+          <button type="button" data-action="heavy" hidden>Heavy</button>
+          <button type="button" data-action="kick" hidden>Kick</button>
+          <button type="button" data-action="shove" hidden>Shove</button>
           <button type="button" data-action="holster">Holster</button>
           <button type="button" data-action="dodge">Dodge</button>
         </div>
       </div>
 
+      <aside id="partner" hidden><span>Sparring partner</span><output id="partner-state"></output><meter id="partner-health" min="0" max="100" value="100" aria-label="Partner health"></meter></aside>
       <footer class="bottom">
-        <div class="vitals"><span class="ui-label">HEALTH</span><strong id="health">100</strong><meter id="health-bar" min="0" max="100" value="100" aria-label="Health"></meter></div>
+        <div class="vitals"><span class="ui-label">HEALTH</span><strong id="health">100</strong><meter id="health-bar" min="0" max="100" value="100" aria-label="Health"></meter><label class="stamina">Stamina<meter id="stamina" min="0" max="100" value="100"></meter></label></div>
         <p class="key-guide">Pause for controls and loadout</p>
-        <div class="weapon"><span class="ui-label" id="weapon">P9 PISTOL</span><div><strong id="ammo">12</strong><span id="reserve">/ 72</span></div><output id="reload-state"></output></div>
+        <div class="weapon"><span id="mode"></span><span class="ui-label" id="weapon">P9 PISTOL</span><div><strong id="ammo">12</strong><span id="reserve">/ 72</span></div><output id="reload-state"></output></div>
       </footer>
       <div id="loading" class="loading" role="status"><strong>Loading Yard 01…</strong></div>
       <dialog id="menu" aria-labelledby="menu-title">
         <div class="menu-head"><span>YARD 01</span><h1 id="menu-title">Paused</h1></div>
+        <fieldset><legend>Loadout</legend><label>Equipped item<select id="loadout"></select></label>
+          <p id="gear-details"></p>
+        </fieldset>
         <fieldset>
           <legend>Settings</legend>
           <label for="quality">Graphics quality<select id="quality"><option value="low">Low</option><option value="balanced">Balanced</option><option value="high">High</option></select></label>
