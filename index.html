@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#152224">
+    <link rel="icon" href="%BASE_URL%range-icon.svg" type="image/svg+xml">
+    <title>Tactical Combat | Yard 01</title>
+  </head>
+  <body>
+    <main id="game" aria-label="Tactical Combat training arena">
+      <div id="surface" aria-label="3D training yard"></div>
+      <div class="shade" aria-hidden="true"></div>
+      <header class="top">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span><div><b>TACTICAL COMBAT</b><span>YARD 01 / TRAINING RANGE</span></div></div>
+        <div class="objective"><span>TARGETS DOWN</span><strong id="score">0 / 5</strong></div>
+        <button id="pause" class="pause" type="button" aria-label="Pause game"><span class="pause-icon" aria-hidden="true"></span><span class="pause-label">PAUSE</span></button>
+      </header>
+
+      <div id="crosshair" class="crosshair" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <output id="feedback" class="feedback" aria-live="polite"></output>
+
+      <div class="touch-controls">
+        <div id="joystick" class="joystick" aria-label="Movement joystick"><span id="knob"></span></div>
+        <div class="touch-actions">
+          <button type="button" data-action="run">Run</button>
+          <button type="button" data-action="jump">Jump</button>
+          <button type="button" data-action="reload">Reload</button>
+          <button type="button" data-action="aim">Aim</button>
+          <button type="button" data-action="fire">Fire</button>
+        </div>
+      </div>
+
+      <footer class="bottom">
+        <div class="vitals"><span class="ui-label">HEALTH</span><strong id="health">100</strong><meter id="health-bar" min="0" max="100" value="100" aria-label="Health"></meter></div>
+        <p class="key-guide"><kbd>WASD</kbd> Move <kbd>↑↓←→</kbd> Look <kbd>J</kbd> Fire <kbd>K</kbd> Aim <kbd>SHIFT</kbd> Run <kbd>SPACE</kbd> Jump <kbd>R</kbd> Reload</p>
+        <div class="weapon"><span class="ui-label" id="weapon">P9 PISTOL</span><div><strong id="ammo">12</strong><span id="reserve">/ 72</span></div><output id="reload-state"></output></div>
+      </footer>
+      <div id="loading" class="loading" role="status"><strong>Loading Yard 01…</strong></div>
+      <dialog id="menu" aria-labelledby="menu-title">
+        <div class="menu-head"><span>YARD 01</span><h1 id="menu-title">Paused</h1></div>
+        <fieldset>
+          <legend>Settings</legend>
+          <label for="quality">Graphics quality<select id="quality"><option value="low">Low</option><option value="balanced">Balanced</option><option value="high">High</option></select></label>
+          <label for="lookSensitivity">Look sensitivity<input id="lookSensitivity" type="range" min="0.4" max="2" step="0.1"></label>
+          <label for="touchSensitivity">Touch sensitivity<input id="touchSensitivity" type="range" min="0.4" max="2" step="0.1"></label>
+          <label for="buttonSize">Touch button size<input id="buttonSize" type="range" min="0.8" max="1.3" step="0.05"></label>
+        </fieldset>
+        <p class="menu-help">Drag with the right mouse button to look and aim. On touchscreens, swipe the right side to look.</p>
+        <div class="menu-buttons"><button type="button" id="restart">Restart range</button><button type="button" id="resume" autofocus>Resume</button></div>
+      </dialog>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
