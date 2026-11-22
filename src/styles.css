@@ -73,7 +73,8 @@ kbd:not(:first-child) { margin-left: 6px; }
 @media (any-pointer: coarse) {
   .key-guide { display: none; }
   .touch-controls { display: contents; }
-  .joystick, .touch-actions { position: absolute; bottom: max(99px, calc(env(safe-area-inset-bottom) + 88px)); }
+  /* Leave space above the HUD, including the reload indicator. */
+  .joystick, .touch-actions { position: absolute; bottom: calc(max(20px, env(safe-area-inset-bottom)) + 106px); }
   .joystick { left: max(20px, env(safe-area-inset-left)); width: clamp(76px, 22vw, 112px); aspect-ratio: 1; }
   .joystick, .touch-actions button { display: grid; place-items: center; border: 1px solid #d1e0d382; background: #142021b8; border-radius: 50%; touch-action: none; }
   #knob { width: 43%; aspect-ratio: 1; border: 1px solid #d7e3d5; border-radius: 50%; background: #a5b8aa91; pointer-events: none; }
@@ -82,11 +83,11 @@ kbd:not(:first-child) { margin-left: 6px; }
   .touch-actions [data-action="fire"] { grid-column: 3; grid-row: 2; color: #ffe0ad; border-color: #e9b978; background: #593b27ce; }
   .touch-actions [data-action="aim"] { grid-column: 2; grid-row: 2; }
   .touch-actions .held { background: #98764b; color: #fff; }
-  @media (orientation: landscape) and (max-height: 520px) {
-    .joystick, .touch-actions { bottom: max(73px, calc(env(safe-area-inset-bottom) + 62px)); }
+  @media (max-width: 680px) {
+    .joystick, .touch-actions { bottom: max(99px, calc(env(safe-area-inset-bottom) + 88px)); }
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 680px) {
   .top, .bottom { inset-inline: max(8px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-right)); gap: 6px; }
   .top { top: max(8px, env(safe-area-inset-top)); }
   .bottom { bottom: max(8px, env(safe-area-inset-bottom)); }

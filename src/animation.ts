@@ -78,6 +78,8 @@ export class Operative {
   reset() {
     this.stride = this.kick = 0
     this.flash.visible = false
+    for (const leg of this.legs) leg.rotation.x = 0
+    for (const arm of this.arms) arm.rotation.set(0, 0, 0)
   }
 
   muzzlePosition(out: T.Vector3) { return this.muzzle.getWorldPosition(out) }

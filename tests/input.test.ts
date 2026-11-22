@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { InputState, keys } from '../src/input'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { bindInput, InputState, keys } from '../src/input'
 
 describe('device-independent input', () => {
   it('maps every documented keyboard action', () => {
@@ -50,5 +50,109 @@ describe('device-independent input', () => {
     input.clear()
     expect(input.down('fire')).toBe(false)
     expect(input.take('fire')).toBe(false)
+  })
+})
+
+describe('bound pointer events', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  function setup() {
+    function element() {
+      const classes = new Set<string>()
+      return Object.assign(new EventTarget(), {
+        clientWidth: 400,
+        style: { transform: '' },
+        classList: {
+          add: (name: string) => classes.add(name),
+          remove: (name: string) => classes.delete(name),
+          contains: (name: string) => classes.has(name),
+        },
+        setPointerCapture: vi.fn(),
+      })
+    }
+
+    const root = new EventTarget()
+    const surface = element()
+    const joystick = element()
+    const knob = element()
+    const aim = Object.assign(element(), { dataset: { action: 'aim' } })
+    const fire = Object.assign(element(), { dataset: { action: 'fire' } })
+    vi.stubGlobal('window', root)
+    vi.stubGlobal('document', { querySelectorAll: () => [aim, fire] })
+    const input = new InputState()
+    const clear = bindInput(input, surface as unknown as HTMLElement, joystick as unknown as HTMLElement,
+      knob as unknown as HTMLElement, () => 1)
+    return { root, surface, joystick, knob, aim, fire, input, clear }
+  }
+
+  function pointer(target: EventTarget, type: string, pointerId: number, pointerType: string, overrides = {}) {
+    target.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), {
+      pointerId, pointerType, button: 0, buttons: 1, clientX: 200, clientY: 100,
+      movementX: 0, movementY: 0, ...overrides,
+    }))
+  }
+
+  it('keeps mouse fire held through unrelated pointer up and cancellation', () => {
+    const { root, surface, fire, input } = setup()
+    pointer(surface, 'pointerdown', 1, 'mouse')
+    pointer(fire, 'pointerdown', 2, 'touch')
+    pointer(root, 'pointerup', 2, 'touch', { buttons: 0 })
+    expect(input.down('fire')).toBe(true)
+    pointer(root, 'pointercancel', 3, 'touch', { button: -1, buttons: 0 })
+    expect(input.down('fire')).toBe(true)
+    pointer(root, 'pointerup', 1, 'mouse', { buttons: 0 })
+    expect(input.down('fire')).toBe(false)
+  })
+
+  it('tracks both mouse buttons when chord changes are delivered as pointer moves', () => {
+    const { root, surface, input } = setup()
+    pointer(surface, 'pointerdown', 1, 'mouse', { button: 2, buttons: 2 })
+    pointer(surface, 'pointermove', 1, 'mouse', { button: 0, buttons: 3, movementX: 4 })
+    expect(input.down('aim')).toBe(true)
+    expect(input.down('fire')).toBe(true)
+    expect(input.readLook()).toEqual({ x: 4, y: 0 })
+    pointer(surface, 'pointermove', 1, 'mouse', { button: 0, buttons: 2 })
+    expect(input.down('fire')).toBe(false)
+    expect(input.down('aim')).toBe(true)
+    pointer(root, 'pointerup', 1, 'mouse', { button: 2, buttons: 0 })
+    expect(input.down('aim')).toBe(false)
+  })
+
+  it('does not leave mouse fire held after capture loss or its own cancellation', () => {
+    const { root, surface, input } = setup()
+    pointer(surface, 'pointerdown', 1, 'mouse')
+    pointer(surface, 'lostpointercapture', 1, 'mouse', { button: -1 })
+    expect(input.down('fire')).toBe(false)
+    pointer(surface, 'pointerdown', 1, 'mouse')
+    pointer(root, 'pointercancel', 1, 'mouse', { button: -1, buttons: 0 })
+    expect(input.down('fire')).toBe(false)
+  })
+
+  it('releases only the cancelled or captured touch and clears remaining input together', () => {
+    const { root, surface, joystick, knob, aim, fire, input, clear } = setup()
+    pointer(joystick, 'pointerdown', 2, 'touch')
+    pointer(joystick, 'pointermove', 2, 'touch', { clientY: 68 })
+    pointer(surface, 'pointerdown', 3, 'touch')
+    pointer(surface, 'pointermove', 3, 'touch', { clientX: 220 })
+    pointer(aim, 'pointerdown', 4, 'touch')
+    pointer(fire, 'pointerdown', 5, 'touch')
+    expect(input.axes().y).toBeCloseTo(0.25)
+    expect(input.readLook()).toEqual({ x: 20, y: 0 })
+    expect(input.down('aim')).toBe(true)
+    expect(input.down('fire')).toBe(true)
+    pointer(root, 'pointercancel', 5, 'touch', { button: -1, buttons: 0 })
+    pointer(surface, 'lostpointercapture', 3, 'touch', { button: -1, buttons: 0 })
+    pointer(surface, 'pointermove', 3, 'touch', { clientX: 240 })
+    expect(input.readLook().x).toBe(0)
+    expect(input.axes().y).toBeCloseTo(0.25)
+    expect(input.down('aim')).toBe(true)
+    expect(input.down('fire')).toBe(false)
+    expect(fire.classList.contains('held')).toBe(false)
+    clear()
+    expect(input.axes()).toEqual({ x: 0, y: 0 })
+    expect(input.down('aim')).toBe(false)
+    expect(input.take('fire')).toBe(false)
+    expect(knob.style.transform).toBe('')
+    expect(aim.classList.contains('held')).toBe(false)
   })
 })
