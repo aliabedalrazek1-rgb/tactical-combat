@@ -115,3 +115,16 @@ select { background: #263638; color: inherit; border: 1px solid var(--line); pad
 .menu-buttons { display: flex; justify-content: flex-end; gap: 8px; }
 .menu-buttons button { padding: 8px 13px; min-height: 44px; border: 1px solid var(--line); background: #263638; font-weight: 700; }
 #resume { background: var(--accent); color: #182426; }
+
+details { padding: 8px 0; border-top: 1px solid var(--line); }
+summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
+dialog button { padding: 5px 9px; border: 1px solid var(--line); background: #263638; }
+#bindings > div { display:flex; align-items:center; flex-wrap:wrap; gap:4px; min-height:36px; }
+#bindings span { flex:1; }
+#capture { position:sticky; bottom:0; padding:10px; background:#33474a; }
+#binding-status { display:block; }
+dialog button[hidden], [data-action][hidden] { display:none; }
+@media (any-pointer: coarse) {
+  .touch-actions { display:contents; }
+  #joystick,.touch-actions button { position:absolute; bottom:auto; right:auto; transform:translate(-50%, -50%); }
+}

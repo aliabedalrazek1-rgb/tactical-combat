@@ -10,6 +10,8 @@ import { Rendering } from './rendering'
 import { loadSettings, saveSettings } from './settings'
 import { element, HUD } from './ui'
 import { pistol, Weapon } from './weapon'
+import { loadControls, saveControls } from './bindings'
+import { controlEditor } from './control-editor'
 import './styles.css'
 
 async function start() {
@@ -26,16 +28,18 @@ async function start() {
   const operative = new Operative(graphics.scene)
   const effects = new ShotEffects(graphics.scene)
   const camera = new ShoulderCamera(graphics.camera, physics)
+  const controls = loadControls(storage)
+  const positionControls = controlEditor(controls, () => saveControls(storage, controls), () => settings.buttonSize)
   const hud = new HUD(settings, (key) => {
     saveSettings(storage, settings)
     if (key === 'quality') {
       graphics.quality(settings.quality)
       graphics.draw(true)
     }
-    if (key === 'buttonSize') setButtonSize()
+    if (key === 'buttonSize') positionControls()
   })
   const input = new InputState()
-  const clearInput = bindInput(input, surface, element('joystick'), element('knob'), () => settings.touchSensitivity)
+  const clearInput = bindInput(input, surface, element('joystick'), element('knob'), () => settings.touchSensitivity, controls, () => !paused)
   const player = { health: 100, maxHealth: 100 }
   const position = new T.Vector3()
   const muzzle = new T.Vector3()
@@ -48,10 +52,6 @@ async function start() {
   let accumulator = 0
   let shadowTime = 0
   let paused = false
-
-  function setButtonSize() {
-    document.documentElement.style.setProperty('--touch-button', `${52 * settings.buttonSize}px`)
-  }
 
   function resetRange() {
     now = accumulator = shotPoseUntil = shadowTime = 0
@@ -76,13 +76,30 @@ async function start() {
     paused = value
     accumulator = 0
     clearInput()
-    if (paused) hud.menu.showModal()
+    if (paused) {
+      if (document.pointerLockElement === surface) document.exitPointerLock()
+      hud.menu.showModal()
+    }
     else {
       hud.menu.close()
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     }
   }
 
+  element('lock').addEventListener('click', async () => {
+    setPaused(false)
+    try {
+      await surface.requestPointerLock()
+    } catch {
+      hud.notify('Pointer lock unavailable · drag to look', now, false, 3)
+    }
+  })
+  let hadLock = false
+  document.addEventListener('pointerlockchange', () => {
+    const locked = document.pointerLockElement === surface
+    if (hadLock && !locked) setPaused(true)
+    hadLock = locked
+  })
   element('pause').addEventListener('click', () => setPaused(true))
   element('resume').addEventListener('click', () => setPaused(false))
   element('restart').addEventListener('click', () => {
@@ -129,7 +146,7 @@ async function start() {
     const horizontal = +input.down('lookRight') - +input.down('lookLeft')
     const vertical = +input.down('lookDown') - +input.down('lookUp')
     camera.rotate((horizontal * 1.85 * dt + look.x * 0.0035) * sensitivity,
-      (vertical * 1.45 * dt + look.y * 0.0035) * sensitivity)
+      (vertical * 1.45 * dt + look.y * 0.0035 * (controls.invert ? -1 : 1)) * controls.vertical * (aim ? 0.66 : 1))
     const desired = movement.step(input.axes(), camera.yaw, running, input.take('jump'), aim, dt, ready && !weapon.reloading)
     const motion = physics.move(desired)
     movement.contacts(motion.grounded, motion.movement.y, desired.y)
@@ -164,7 +181,7 @@ async function start() {
     requestAnimationFrame(frame)
   }
 
-  setButtonSize()
+  positionControls()
   graphics.quality(settings.quality)
   resetRange()
   element('loading').hidden = true

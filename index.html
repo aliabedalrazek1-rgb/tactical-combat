@@ -28,12 +28,14 @@
           <button type="button" data-action="reload">Reload</button>
           <button type="button" data-action="aim">Aim</button>
           <button type="button" data-action="fire">Fire</button>
+          <button type="button" data-action="holster">Holster</button>
+          <button type="button" data-action="dodge">Dodge</button>
         </div>
       </div>
 
       <footer class="bottom">
         <div class="vitals"><span class="ui-label">HEALTH</span><strong id="health">100</strong><meter id="health-bar" min="0" max="100" value="100" aria-label="Health"></meter></div>
-        <p class="key-guide"><kbd>WASD</kbd> Move <kbd>↑↓←→</kbd> Look <kbd>J</kbd> Fire <kbd>K</kbd> Aim <kbd>SHIFT</kbd> Run <kbd>SPACE</kbd> Jump <kbd>R</kbd> Reload</p>
+        <p class="key-guide">Pause for controls and loadout</p>
         <div class="weapon"><span class="ui-label" id="weapon">P9 PISTOL</span><div><strong id="ammo">12</strong><span id="reserve">/ 72</span></div><output id="reload-state"></output></div>
       </footer>
       <div id="loading" class="loading" role="status"><strong>Loading Yard 01…</strong></div>
@@ -42,11 +44,34 @@
         <fieldset>
           <legend>Settings</legend>
           <label for="quality">Graphics quality<select id="quality"><option value="low">Low</option><option value="balanced">Balanced</option><option value="high">High</option></select></label>
-          <label for="lookSensitivity">Look sensitivity<input id="lookSensitivity" type="range" min="0.4" max="2" step="0.1"></label>
-          <label for="touchSensitivity">Touch sensitivity<input id="touchSensitivity" type="range" min="0.4" max="2" step="0.1"></label>
-          <label for="buttonSize">Touch button size<input id="buttonSize" type="range" min="0.8" max="1.3" step="0.05"></label>
         </fieldset>
-        <p class="menu-help">Drag with the right mouse button to look and aim. On touchscreens, swipe the right side to look.</p>
+        <details id="controls"><summary>Controls</summary>
+        <fieldset><legend>Camera and touch</legend>
+          <label>Horizontal sensitivity<input id="lookSensitivity" type="range" min="0.4" max="2" step="0.1"></label>
+          <label>Vertical sensitivity<input id="vertical" type="range" min="0.4" max="2" step="0.1"></label>
+          <label>Invert vertical look<input id="invert" type="checkbox"></label>
+          <label>Drag to look<select id="dragButton"><option value="2">Right button</option><option value="0">Left button</option><option value="1">Middle button</option></select></label>
+          <button type="button" id="lock">Resume with pointer lock</button>
+          <label>Swipe sensitivity<input id="touchSensitivity" type="range" min="0.4" max="2" step="0.1"></label>
+          <label>Touch button size<input id="buttonSize" type="range" min="0.8" max="1.3" step="0.05"></label>
+        </fieldset>
+        <details><summary>Keyboard and pointer bindings</summary>
+          <p>Choose a binding, then press a key or pointer button. Escape cancels. Tab and Enter navigate menus.</p>
+          <div id="bindings"></div>
+          <div id="capture" hidden><output id="binding-status" aria-live="polite"></output>
+          <button type="button" id="move-binding" hidden>Reassign</button><button type="button" id="cancel-binding">Cancel</button></div>
+          <button type="button" id="default-bindings">Restore default bindings</button>
+        </details>
+        <details><summary>Touch layout editor</summary>
+          <fieldset><label>Layout<select id="layout"><option>phone</option><option>tablet</option></select></label>
+          <label>Left-handed<input id="left-handed" type="checkbox"></label>
+          <label>Control<select id="touch-item"></select></label>
+          <label>Horizontal position<input id="touch-x" type="range" min="0" max="100"></label>
+          <label>Vertical position<input id="touch-y" type="range" min="0" max="100"></label>
+          <label>Control size<input id="touch-size" type="range" min="0.65" max="1.5" step="0.05"></label>
+          <button type="button" id="reset-layout">Restore this layout</button></fieldset>
+        </details></details>
+        <p id="menu-help" class="menu-help">Drag to look or enable pointer lock in Controls. On touchscreens, swipe the yard to look.</p>
         <div class="menu-buttons"><button type="button" id="restart">Restart range</button><button type="button" id="resume" autofocus>Resume</button></div>
       </dialog>
     </main>
