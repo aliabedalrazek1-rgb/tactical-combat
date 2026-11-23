@@ -1,25 +1,39 @@
-export const keys = {
-  KeyW: 'forward', KeyS: 'back', KeyA: 'left', KeyD: 'right',
-  ArrowUp: 'lookUp', ArrowDown: 'lookDown', ArrowLeft: 'lookLeft', ArrowRight: 'lookRight',
-  KeyJ: 'fire', KeyK: 'aim', ShiftLeft: 'run', ShiftRight: 'run',
-  Space: 'jump', KeyR: 'reload', Escape: 'pause',
-} as const
-export type Action = typeof keys[keyof typeof keys]
-
+import { keys, type Action, type Controls } from './bindings'
+export { keys, type Action } from './bindings'
 export class InputState {
   private held = new Map<string, Action>()
-  private edges = new Set<Action>()
+  private edges = new Map<Action, string | null>()
   private motion = { x: 0, y: 0 }
   stick = { x: 0, y: 0 }
 
+  constructor(private readonly menuAction?: (action: 'pause' | 'loadout') => void) {}
+
   press(id: string, action: Action) {
     if (this.held.has(id)) return
-    if (!this.down(action)) this.edges.add(action)
+    if (this.menuAction && (action === 'pause' || action === 'loadout')) {
+      this.held.set(id, action)
+      this.menuAction(action)
+      return
+    }
+    if (!this.down(action) && !this.edges.has(action)) this.edges.set(action, id)
     this.held.set(id, action)
   }
 
-  release(id: string) {
+  release(id: string, cancelled = false) {
+    const action = this.held.get(id)
     this.held.delete(id)
+    if (!action || !this.edges.has(action)) return
+    if (!cancelled) {
+      this.edges.set(action, null)
+      return
+    }
+    if (this.edges.get(action) !== id) return
+    for (const [other, held] of this.held) {
+      if (held !== action) continue
+      this.edges.set(action, other)
+      return
+    }
+    this.edges.delete(action)
   }
 
   down(action: Action) {
@@ -57,7 +71,7 @@ export class InputState {
   }
 }
 
-export function bindInput(input: InputState, surface: HTMLElement, joystick: HTMLElement, knob: HTMLElement, touchSensitivity: () => number) {
+export function bindInput(input: InputState, surface: HTMLElement, joystick: HTMLElement, knob: HTMLElement, touchSensitivity: () => number, controls?: Controls, playing = () => true) {
   let swipe = -1
   let stick = -1
   let originX = 0
@@ -69,11 +83,13 @@ export function bindInput(input: InputState, surface: HTMLElement, joystick: HTM
   const id = (event: PointerEvent) => `pointer-${event.pointerId}`
 
   window.addEventListener('keydown', (event) => {
-    const action = keys[event.code as keyof typeof keys]
+    const bindings = controls?.bindings ?? keys
+    const action = bindings[event.code as keyof typeof bindings]
+    if (!playing() && action !== 'pause') return
     if (!action || event.ctrlKey || event.metaKey || event.altKey) return
-    if (action !== 'pause' && (event.target instanceof HTMLInputElement ||
-      event.target instanceof HTMLSelectElement ||
-      (event.target instanceof HTMLButtonElement && action === 'jump'))) return
+    const target = event.target
+    if (event.code !== 'Escape' && target instanceof HTMLElement &&
+      (target.matches('input, select, textarea') || (event.code === 'Space' && target.matches('button, summary')))) return
     event.preventDefault()
     if (!event.repeat) input.press(event.code, action)
   })
@@ -85,25 +101,32 @@ export function bindInput(input: InputState, surface: HTMLElement, joystick: HTM
     knob.style.transform = ''
   }
 
-  function updateMouseButtons(buttons: number) {
-    if (buttons & 1) input.press('mouse-fire', 'fire')
-    else input.release('mouse-fire')
-    if (buttons & 2) input.press('mouse-aim', 'aim')
-    else input.release('mouse-aim')
+  const mouseMasks = [1, 4, 2, 8, 16]
+  function updateMouseButtons(buttons: number, cancelled = false) {
+    const bindings = controls?.bindings ?? keys
+    for (const [index, mask] of mouseMasks.entries()) {
+      const code = 'Mouse' + index
+      const action = bindings[code as keyof typeof bindings]
+      if (action && (buttons & mask)) {
+        input.press(code, action)
+        if (!playing()) return
+      } else input.release(code, cancelled)
+    }
   }
 
   surface.addEventListener('contextmenu', (event) => event.preventDefault())
   surface.addEventListener('pointerdown', (event) => {
+    if (!playing()) return
     if (event.pointerType !== 'mouse') {
-      if (swipe !== -1 || event.clientX < surface.clientWidth * 0.35) return
+      if (swipe !== -1) return
       swipe = event.pointerId
       previousX = event.clientX
       previousY = event.clientY
       surface.setPointerCapture(event.pointerId)
-    } else if (event.buttons & 3) {
+    } else if (event.buttons) {
       mouse = event.pointerId
       updateMouseButtons(event.buttons)
-      surface.setPointerCapture(event.pointerId)
+      if (mouse === event.pointerId && document.pointerLockElement !== surface) surface.setPointerCapture(event.pointerId)
     }
   })
   surface.addEventListener('pointermove', (event) => {
@@ -112,19 +135,21 @@ export function bindInput(input: InputState, surface: HTMLElement, joystick: HTM
       previousX = event.clientX
       previousY = event.clientY
     }
-    if (event.pointerId === mouse) {
-      // Mouse button chords deliver intermediate presses and releases as pointer moves.
-      updateMouseButtons(event.buttons)
-      if (event.buttons & 2) input.look(event.movementX, event.movementY)
-    }
+    if (!playing()) return
+    const locked = event.pointerType === 'mouse' && document.pointerLockElement === surface
+    // Mouse button chords deliver intermediate presses and releases as pointer moves.
+    const ownsButtons = event.pointerId === mouse
+    if (ownsButtons) updateMouseButtons(event.buttons)
+    if (playing() && (locked || (ownsButtons && (event.buttons & mouseMasks[controls?.dragButton ?? 2]))))
+      input.look(event.movementX, event.movementY)
   })
   surface.addEventListener('lostpointercapture', (event) => {
     if (event.pointerId === swipe) swipe = -1
-    endMouse(event.pointerId)
+    endMouse(event.pointerId, true)
   })
 
   joystick.addEventListener('pointerdown', (event) => {
-    if (stick !== -1) return
+    if (!playing() || stick !== -1) return
     stick = event.pointerId
     originX = event.clientX
     originY = event.clientY
@@ -145,6 +170,7 @@ export function bindInput(input: InputState, surface: HTMLElement, joystick: HTM
 
   document.querySelectorAll<HTMLButtonElement>('[data-action]').forEach((button) => {
     button.addEventListener('pointerdown', (event) => {
+      if (!playing()) return
       event.preventDefault()
       heldButtons.set(event.pointerId, button)
       button.classList.add('held')
@@ -154,20 +180,21 @@ export function bindInput(input: InputState, surface: HTMLElement, joystick: HTM
     button.addEventListener('lostpointercapture', endPointer)
   })
 
-  function endMouse(pointerId: number) {
+  function endMouse(pointerId: number, cancelled: boolean) {
     if (pointerId !== mouse) return
     mouse = -1
-    updateMouseButtons(0)
+    updateMouseButtons(0, cancelled)
   }
 
   function endPointer(event: PointerEvent) {
-    input.release(id(event))
+    const cancelled = event.type !== 'pointerup'
+    input.release(id(event), cancelled)
     const button = heldButtons.get(event.pointerId)
     heldButtons.delete(event.pointerId)
     if (button && !Array.from(heldButtons.values()).includes(button)) button.classList.remove('held')
     if (event.pointerId === stick) resetStick()
     if (event.pointerId === swipe) swipe = -1
-    endMouse(event.pointerId)
+    endMouse(event.pointerId, cancelled)
   }
 
   window.addEventListener('pointerup', endPointer)

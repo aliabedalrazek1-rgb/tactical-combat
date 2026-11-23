@@ -30,9 +30,6 @@ export function traceShot(raycast: Raycast, view: Vector3, direction: Vector3, s
   const sight = raycast(view, direction, range)
   const endpoint = view.clone().addScaledVector(direction, sight?.distance ?? range)
   const trajectory = endpoint.sub(muzzle)
-  const length = trajectory.length()
-  if (length < 0.001) return { start: muzzle, end: muzzle, hit: null }
-  trajectory.divideScalar(length)
 
   // Check both the weapon pose and the projectile path against cover.
   const barrel = muzzle.clone().sub(shoulder)
@@ -42,6 +39,12 @@ export function traceShot(raycast: Raycast, view: Vector3, direction: Vector3, s
     const obstruction = raycast(shoulder, barrel, clearance)
     if (obstruction) return { start: shoulder, end: shoulder.clone().addScaledVector(barrel, obstruction.distance), hit: obstruction }
   }
+
+  // A close sight hit can lie behind the muzzle of an offset shoulder camera.
+  if (trajectory.dot(direction) <= 0.001) trajectory.copy(direction).multiplyScalar(range)
+  const length = trajectory.length()
+  if (length < 0.001) return { start: muzzle, end: muzzle, hit: null }
+  trajectory.divideScalar(length)
 
   const hit = raycast(muzzle, trajectory, Math.min(range, length + 0.035))
   return { start: muzzle, end: muzzle.clone().addScaledVector(trajectory, hit?.distance ?? Math.min(range, length)), hit }
