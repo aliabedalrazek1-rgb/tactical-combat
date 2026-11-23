@@ -73,7 +73,7 @@ The Vitest suite covers bindings, pointer ownership, movement and Rapier collisi
 python tests/browser/range.py http://localhost:4173/tactical-combat/
 ```
 
-Set `CHROMIUM` to use a specific executable. The browser script exercises the production page through keyboard, mouse and emulated touch input. Its optional trailing arguments select `desktop`, `spar` or `touch`. These checks use Chromium's software renderer. Physical Android, tablet, Windows and touchpad performance require separate hardware testing.
+Set `CHROMIUM` to use a specific executable. The browser script exercises the production page through keyboard, mouse and emulated touch input. Its optional trailing arguments select `desktop`, `spar`, `touch`, `remap`, `overlap`, or `timing`. These checks use Chromium's software renderer. Physical Android, tablet, Windows and touchpad performance require separate hardware testing.
 
 The fixed-step loop in `src/main.ts` connects gameplay input, Rapier movement, combat, animation and the HUD. `fighter.ts` handles timed actions and directional contact. `weapon.ts` owns weapon definitions, ammo, spread and the loadout. `sparring.ts` runs the scripted mat partner. Character animation and weapon geometry are procedural. Costume geometry is batched by animated bone and shot effects are pooled.
 

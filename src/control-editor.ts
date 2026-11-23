@@ -26,6 +26,38 @@ const grid: Record<TouchControl, [number, number]> = {
   stick: [0, 0],
 }
 const device = (): Layout => (Math.min(innerWidth, innerHeight) >= 600 ? 'tablet' : 'phone')
+type Bounds = { left: number; right: number; top: number; bottom: number }
+const meleeOnly = new Set<TouchControl>(['heavy', 'kick', 'shove'])
+
+function placeInFreeSpace(x: number, y: number, radius: number, width: number, height: number, blocked: Bounds[]) {
+  const padding = 2
+  const min = radius + padding
+  const maxX = width - min
+  const maxY = height - min
+  const clamp = (value: number, max: number) => Math.max(min, Math.min(max, value))
+  x = clamp(x, maxX)
+  y = clamp(y, maxY)
+  const xs = [x, min, maxX]
+  const ys = [y, min, maxY]
+  for (const box of blocked) {
+    xs.push(clamp(box.left - min, maxX), clamp(box.right + min, maxX))
+    ys.push(clamp(box.top - min, maxY), clamp(box.bottom + min, maxY))
+  }
+  let best: Bounds | undefined
+  let nearest = Infinity
+  for (const cx of xs) {
+    for (const cy of ys) {
+      const distance = (cx - x) ** 2 + (cy - y) ** 2
+      if (distance >= nearest) continue
+      const box = { left: cx - radius, right: cx + radius, top: cy - radius, bottom: cy + radius }
+      if (blocked.some((other) =>
+        box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) continue
+      best = box
+      nearest = distance
+    }
+  }
+  return best
+}
 
 export function controlEditor(controls: Controls, save: () => void, baseSize: () => number) {
   const list = element('bindings')
@@ -217,7 +249,7 @@ export function controlEditor(controls: Controls, save: () => void, baseSize: ()
     const width = innerWidth
     const top = Math.max(64, element('pause').getBoundingClientRect().bottom + 6)
     const bottom = document.querySelector<HTMLElement>('.bottom')!.getBoundingClientRect().top - 24
-    const height = Math.max(70, bottom - top)
+    const height = Math.max(1, bottom - top)
     const diameter = Math.min((profile === 'tablet' ? 60 : 48) * baseSize(), height / 3.65, width / 7)
     return { width, height, top, diameter }
   }
@@ -231,24 +263,52 @@ export function controlEditor(controls: Controls, save: () => void, baseSize: ()
       ? { x: 0.15, y: 0.78, size: 1 }
       : { x: 1 - (pad + col * gap) / dims.width, y: 1 - (pad + row * gap) / dims.height, size: 1 }
   }
+  function arranged(profile: Layout, dims: ReturnType<typeof dimensions>) {
+    const placed = new Map<TouchControl, Bounds>()
+    const center = dims.width / 2
+    const partnerTop = (dims.width <= 680 ? 66 : 80) - dims.top
+    const reticle = (profile === device() ? innerHeight / 2 - dims.top : dims.height * 0.4)
+    // Keep space for the sparring HUD, reticle and strike feedback, even when hidden.
+    const hud = [
+      { left: center - 130, right: center + 130, top: partnerTop, bottom: partnerTop + 42 },
+      { left: center - 90, right: center + 90, top: reticle - 10, bottom: reticle + 43 },
+    ]
+    for (const name of touchControls) {
+      const pos = placement(profile, name, dims)
+      const horizontal = controls[profile].leftHanded ? 1 - pos.x : pos.x
+      const blocked = [...hud]
+      for (const [other, box] of placed) {
+        if ((name === 'reload' && meleeOnly.has(other)) || (other === 'reload' && meleeOnly.has(name))) continue
+        blocked.push(box)
+      }
+      const x = horizontal * dims.width
+      const y = pos.y * dims.height
+      const radius = (dims.diameter * (name === 'stick' ? 1.85 : 1)) / 2
+      const box =
+        placeInFreeSpace(x, y, radius * pos.size, dims.width, dims.height, blocked) ??
+        placeInFreeSpace(x, y, radius * Math.min(pos.size, 1), dims.width, dims.height, blocked) ??
+        placeInFreeSpace(x, y, radius * 0.65, dims.width, dims.height, blocked)
+      if (box) placed.set(name, box)
+    }
+    return placed
+  }
   function positionControls() {
     const profile = device()
     const dims = dimensions(profile)
+    const placed = arranged(profile, dims)
     for (const [name, node] of nodes) {
-      if (!node) continue
-      const pos = placement(profile, name, dims)
-      const d = dims.diameter * pos.size * (name === 'stick' ? 1.85 : 1)
-      const clamp = (v: number, max: number) => Math.max(d / 2 + 2, Math.min(max - d / 2 - 2, v))
-      const horizontal = controls[profile].leftHanded ? 1 - pos.x : pos.x
+      const box = placed.get(name)
+      if (!node || !box) continue
+      const d = box.right - box.left
       node.style.cssText =
         'width:' +
         d +
         'px;height:' +
         d +
         'px;left:' +
-        clamp(horizontal * dims.width, dims.width) +
+        (box.left + d / 2) +
         'px;top:' +
-        (dims.top + clamp(pos.y * dims.height, dims.height)) +
+        (dims.top + box.top + d / 2) +
         'px'
     }
   }
@@ -299,16 +359,18 @@ export function controlEditor(controls: Controls, save: () => void, baseSize: ()
   function drawPreview() {
     const profile = layout.value as Layout
     const dims = dimensions(profile)
+    const placed = arranged(profile, dims)
     const gunPreview = item.value === 'reload'
     for (const { name, marker } of markers) {
-      const pos = placement(profile, name, dims)
+      const box = placed.get(name)
       marker.hidden = gunPreview ? ['heavy', 'shove', 'kick'].includes(name) : name === 'reload'
       marker.classList.toggle('selected', item.value === name)
-      const radius = ((name === 'stick' ? 35 : 27) * pos.size) / 2
-      const percent = (left.checked ? 1 - pos.x : pos.x) * 100
+      if (!box) continue
+      const radius = ((name === 'stick' ? 35 / 1.85 : 27) * (box.right - box.left)) / dims.diameter / 2
+      const percent = ((box.left + box.right) / 2 / dims.width) * 100
       marker.style.left = 'clamp(' + radius + 'px,' + percent + '%,calc(100% - ' + radius + 'px))'
-      marker.style.top = pos.y * 100 + '%'
-      marker.style.width = marker.style.height = (name === 'stick' ? 35 : 27) * pos.size + 'px'
+      marker.style.top = ((box.top + box.bottom) / 2 / dims.height) * 100 + '%'
+      marker.style.width = marker.style.height = radius * 2 + 'px'
     }
   }
   function refresh() {

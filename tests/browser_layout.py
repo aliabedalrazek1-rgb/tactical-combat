@@ -5,13 +5,13 @@ Example: python tests/browser_layout.py http://127.0.0.1:5173/tactical-combat/ -
 
 import argparse
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
-LAYOUT = """() => {
+LAYOUT = """(firearm) => {
   // Ensure the longest reload label is present for the layout check.
-  document.querySelector('#reload-state').textContent = 'EMPTY · RELOAD';
+  document.querySelector('#reload-state').textContent = firearm ? 'EMPTY · RELOAD' : 'HEAVY PUNCH';
   const selectors = ['.brand', '.objective', '.pause', '.vitals', '.weapon',
-    '#reload-state', '#joystick', '.touch-actions button'];
+    '#reload-state', '#joystick', '.touch-actions button:not([hidden])'];
   const panels = selectors.flatMap(selector =>
     Array.from(document.querySelectorAll(selector), element =>
       [element.id || element.textContent.trim(), element.getBoundingClientRect()]));
@@ -51,8 +51,11 @@ def main():
                 has_touch=True,
             )
             page.goto(args.url)
-            problems = page.evaluate(LAYOUT)
-            failures.extend(f"{width}x{height}: {problem}" for problem in problems)
+            expect(page.locator("#loading")).to_be_hidden(timeout=20000)
+            failures.extend(f"{width}x{height} firearm: {problem}" for problem in page.evaluate(LAYOUT, True))
+            page.keyboard.press("KeyH")
+            expect(page.locator("#weapon")).to_have_text("UNARMED")
+            failures.extend(f"{width}x{height} melee: {problem}" for problem in page.evaluate(LAYOUT, False))
             page.close()
 
     if failures:

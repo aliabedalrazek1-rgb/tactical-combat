@@ -56,3 +56,17 @@ it('changes visible equipment geometry for every firearm and removes it when hol
   rig.equip('unarmed')
   expect(equipment.visible).toBe(false)
 })
+
+it('clears the previous muzzle flash when switching to melee or another firearm', () => {
+  const rig = new Operative(new Scene())
+  const flash = rig.object.getObjectByName('equipment')!.children.at(-1)!.children[0]
+  rig.shoot(firearms[0])
+  expect(flash.visible).toBe(true)
+  rig.equip('knife')
+  rig.update(new Vector3(), 0, 'idle', false, 0, false, 1 / 60)
+  expect(flash.visible).toBe(false)
+  rig.equip('p9', firearms[0])
+  rig.shoot(firearms[0])
+  rig.equip(firearms[1].id, firearms[1])
+  expect(flash.visible).toBe(false)
+})

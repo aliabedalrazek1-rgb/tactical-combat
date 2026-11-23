@@ -9,6 +9,36 @@ function duel() {
   const hit = () => contact(a, origin, b, front, () => true)
   return { a, b, hit }
 }
+it.each([
+  ['unarmed', 'fire', false, 'jab', 10],
+  ['unarmed', 'heavy', false, 'heavy', 20],
+  ['unarmed', 'kick', false, 'kick', 16],
+  ['unarmed', 'kick', true, 'stepKick', 21],
+  ['unarmed', 'shove', false, 'shove', 3],
+  ['knife', 'fire', false, 'cut', 15],
+  ['knife', 'heavy', false, 'lunge', 23],
+  ['baton', 'fire', false, 'swing', 17],
+  ['baton', 'heavy', false, 'overhead', 25],
+] as const)('delivers one active-window contact with %s %s (%s)',
+  (equipment, action, advancing, strike, damage) => {
+    const attacker = new Fighter()
+    const defender = new Fighter()
+    attacker.equipment = equipment
+    expect(attacker.start(action, advancing, 0.9)).toBe(true)
+    expect(attacker.strike).toBe(strike)
+    const resolve = () => contact(attacker, origin, defender, front, () => true)
+    const step = 1 / 60
+    const results = []
+    for (let frame = 0; frame < 60; frame++) {
+      const result = resolve()
+      if (result) results.push({ phase: attacker.phase, result })
+      attacker.tick(step)
+    }
+    expect(results).toEqual([{ phase: 'active', result: 'hit' }])
+    expect(defender.health).toBe(100 - damage)
+    expect(attacker.state).toBe('idle')
+  },
+)
 it('requires active contact, hits once and locks incompatible actions through recovery', () => {
   const { a, b, hit } = duel()
   expect(hit()).toBeUndefined()

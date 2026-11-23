@@ -308,10 +308,12 @@ async function start() {
     for (const target of targets) target.update(dt)
     hud.update(loadout, player, targets.filter((t) => t.health === 0).length, targets.length, aim, now)
     hud.showPartner(partner.fighter, distance < 3.3 && !weapon)
+    if (oldItem !== loadout.equipped) positionControls()
   }
 
   function frame(time: number) {
-    const dt = Math.min((time - lastFrame) / 1000, 0.05)
+    // Recover short render stalls while bounding the work done after a long one.
+    const dt = Math.min((time - lastFrame) / 1000, 0.25)
     lastFrame = time
     if (!paused && dt > 0) {
       accumulator += dt

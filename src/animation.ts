@@ -114,16 +114,16 @@ export class Operative {
       this.parts.push(box(this.implement, i === 1 || i === 4 ? accents : gun, 1, 1, 1, 0, 0, 0))
     this.implement.add(this.muzzle)
     for (const bone of [this.torso, ...this.legs, ...this.arms, ...this.elbows]) batchCostume(bone)
-    this.equip('p9', pistol)
     this.flash = new T.Mesh(new T.OctahedronGeometry(0.085), new T.MeshBasicMaterial({ color: 0xffd085 }))
     this.muzzle.add(this.flash)
-    this.flash.visible = false
+    this.equip('p9', pistol)
   }
 
   equip(item: string, spec?: WeaponDefinition) {
     if (item === this.lastItem) return
     this.lastItem = item
-    this.cycle = 0
+    this.kick = this.cycle = 0
+    this.flash.visible = false
     this.implement.visible = item !== 'unarmed'
     for (const part of this.parts) part.visible = false
     const part = (i: number, w: number, h: number, d: number, y: number, z = 0) => {

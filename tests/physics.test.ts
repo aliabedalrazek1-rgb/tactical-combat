@@ -3,6 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { ShoulderCamera } from '../src/camera'
 import { damage, resolveShot, traceShot } from '../src/combat'
+import { contact, Fighter } from '../src/fighter'
 import { spawn } from '../src/movement'
 import { Physics } from '../src/physics'
 
@@ -62,6 +63,42 @@ describe('Rapier collision and combat', () => {
     expect(resolveShot(shot.hit, 34)).toBe('impact')
     expect(shot.end.z).toBeCloseTo(5.5)
     expect(target.health).toBe(100)
+  })
+
+  it('keeps shots forward when an offset camera sees a target behind the muzzle', () => {
+    const behind = { health: 100, maxHealth: 100 }
+    const ahead = { health: 100, maxHealth: 100 }
+    const view = new Vector3(1, 1, 10)
+    const direction = new Vector3(0, 0, -1)
+    const shoulder = new Vector3(0, 1, 8)
+    const muzzle = new Vector3(0, 1, 7)
+    physics.box(0.9, 1, 8, 0.4, 1, 0.4, behind)
+    physics.box(0.45, 1, 0, 1.2, 1, 0.2, ahead)
+    physics.world.step()
+    expect(physics.ray(view, direction, 20)?.target).toBe(behind)
+    const shot = traceShot((o, d, length) => physics.ray(o, d, length), view, direction, shoulder, muzzle, 20)
+    expect(shot.hit?.target).toBe(ahead)
+    expect(shot.end.z).toBeLessThan(muzzle.z)
+    expect(behind.health).toBe(100)
+  })
+
+  it('prevents an active melee strike from making contact across solid Rapier cover', () => {
+    const attacker = new Fighter()
+    const defender = new Fighter()
+    const from = { position: { x: 0, y: 0, z: 0 }, facing: 0 }
+    const to = { position: { x: 0, y: 0, z: -0.9 }, facing: Math.PI }
+    const wall = physics.box(0, 1.1, -0.45, 2, 2.2, 0.16)
+    physics.world.step()
+    attacker.start('fire')
+    attacker.tick(0.12)
+    const strike = () => contact(attacker, from, defender, to,
+      () => !physics.ray({ x: 0, y: 1, z: 0 }, downrange, 0.9, true))
+    expect(strike()).toBeUndefined()
+    expect(defender.health).toBe(100)
+    physics.world.removeCollider(wall, false)
+    physics.world.step()
+    expect(strike()).toBe('hit')
+    expect(defender.health).toBe(90)
   })
 
   it('pulls in the shoulder camera before it intersects a rear wall', () => {
